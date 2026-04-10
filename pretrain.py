@@ -57,6 +57,8 @@ def pretrain():
         n_layers=N_LAYERS,
         n_heads=N_HEADS,
         seq_len=SEQ_LEN,
+        num_embeddings=2,
+        device=DEVICE
     ).to(DEVICE)
     model_summary_str = summary(model) + '\n'
     logger.info(model_summary_str)

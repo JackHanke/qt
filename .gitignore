@@ -208,11 +208,13 @@ __marimo__/
 
 
 
-data/*
-!data/.gitkeep
+data/dev/*
+!data/dev/.gitkeep
+data/train/*
+!data/train/.gitkeep
 
-models/*
-!models/.gitkeep
+models/checkpoints/*
+!models/checkpoints/.gitkeep
 
 logs/*
 !logs/.gitkeep
