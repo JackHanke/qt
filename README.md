@@ -11,7 +11,7 @@
            \/__/                                                  
 ```
 
-qt-1B is a 1 billion parameter from-scratch uncased english language model, created with a focus on conversation. 
+qt-1B (pronounced "cutie") is a 1 billion parameter from-scratch uncased english-only language model.
 
 ## Model
 

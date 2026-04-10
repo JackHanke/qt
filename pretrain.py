@@ -61,7 +61,11 @@ def pretrain():
     model_summary_str = summary(model) + '\n'
     logger.info(model_summary_str)
 
-    # TODO low precision model, gradient accumulation, warmup, cosine scheduler, gradient clipping
+    # TODO low precision model, .to(dtype=torch.bfloat16) adamw_bfloat16
+    # gradient accumulation, 
+    # warmup, cosine scheduler, 
+    # gradient clipping
+    # checkpointing ... when?
 
     optimizer = torch.optim.Adam(model.net.parameters(), lr=LEARNING_RATE)
     
