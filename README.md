@@ -13,29 +13,38 @@
 
 qt (pronounced "cutie") is a 1 billion parameter from-scratch uncased english-only language model.
 
-## Model
+## Model Card
 
-Parameters: `1.018B`
+qt is a dense decoder-only transformer with RoPE position embeddings.
 
-`d_model = 1792`
-
-`ffw_size = 7168`
-
-`kv_size = 128`
-
-`n_heads = 14`
-
-`n_layers = 23`
+```
+Vocab Size: 13,000
+Parameters: 1.018B
+    Embedding: 
+    Non-embedding: 
+d_model = 1792
+ffw_size = 7168
+kv_size = 128
+n_heads = 14
+n_layers = 23
+seq_len = 512
+```
 
 
 ## Data
 
 ### Pretraining
 
-For pretraining, I use the [fineweb-edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) dataset, which is in total 1.3T tokens that is easy to filter to english only
-- The pretraining dataset is a 24.1B token subset of the above dataset, formatted in groups of 2.15GB parquet files each containg ~754M tokens each
+For pretraining, I source my data from the [fineweb-edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) dataset
+- The pretraining dataset is a ~24.1B token subset of the above dataset, formatted in groups of 2.15GB parquet files each containg ~754M tokens each
+
+### Finetuning
+
+TODO
 
 ## Tokenizer
+
+Custom HuggingFace tokenizer trained on uncased english with a vocab_size of 13,000, stored at `data/tokenizer.json`.
 
 ## TODOs
 
