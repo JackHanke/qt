@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 
 import torch
-from torchsummary import summary
+from torchinfo import summary
 from torch.utils.data import DataLoader
 
 from models.qt import qt
@@ -29,15 +29,16 @@ def pretrain():
 
     # configs
     DATA_ROOT = Path(f'data/dev/')
-    BATCH_SIZE = 500_000
-    ACCUMULATE_BATCH_SIZE = 10
+    BATCH_SIZE = 1_000 # number of sequences, not number of tokens
+    ACCUMULATE_BATCH_SIZE = 25
     LEARNING_RATE = 1e-5
     LABEL_SMOOTHING = 0.0
 
-    D_MODEL = 128
-    N_LAYERS = 2
-    N_HEADS = 8
+    D_MODEL = 1792
+    N_LAYERS = 23
+    N_HEADS = 14
     SEQ_LEN = 512
+    NUM_EMBEDDINGS = 13_000
 
     logger.info(f'Starting experiment: {experiment_start_time_str} on device: {DEVICE}')
     logger.info(f'''CONFIGS
@@ -50,47 +51,52 @@ def pretrain():
         N_LAYERS:              {N_LAYERS}
         N_HEADS:               {N_HEADS}
         SEQ_LEN:               {SEQ_LEN}
+        NUM_EMBEDDINGS:        {NUM_EMBEDDINGS}
     ''')
 
     model = qt(
         d_model=D_MODEL,
+        ffw_size=4*D_MODEL,
         n_layers=N_LAYERS,
         n_heads=N_HEADS,
         seq_len=SEQ_LEN,
-        num_embeddings=2,
+        num_embeddings=NUM_EMBEDDINGS,
         device=DEVICE
-    ).to(DEVICE)
-    model_summary_str = summary(model) + '\n'
-    logger.info(model_summary_str)
+    ).to(DEVICE).to(dtype=torch.bfloat16)
+    model_summary_str = str(summary(model))
+    logger.info('\n'+model_summary_str)
 
-    optimizer = torch.optim.Adam(model.net.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
     
-    loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING) # TODO ignore pad token
+    loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING, ignore_index=1) # TODO ignore pad token
 
     train_loss = 0
-    for data_path in os.listdir(DATA_ROOT):
-        dataset = PretrainDataset(data_path=DATA_ROOT/data_path, seq_len=SEQ_LEN)
-        dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+    training_files = os.listdir(DATA_ROOT)
+    for file_num, data_path in enumerate(training_files):
+        dataset = PretrainDataset(data_path=DATA_ROOT/data_path)
+        dataloader = DataLoader(dataset, batch_size=ACCUMULATE_BATCH_SIZE, shuffle=False, pin_memory=True)
 
-        prog_bar = tqdm(enumerate(dataloader), total=(len(dataset)//BATCH_SIZE)+1)
+        total_batches = (len(dataset)//ACCUMULATE_BATCH_SIZE)+1
+        prog_bar = tqdm(enumerate(dataloader), total=total_batches)
         for batch_idx, (seq_in, seq_out) in prog_bar:
-            optimizer.zero_grad()
-
-            seq_in = seq_in.to(DEVICE)
-            seq_out = seq_out.to(DEVICE)
+            seq_in = seq_in.to(DEVICE, non_blocking=True)
+            seq_out = seq_out.to(DEVICE, non_blocking=True)
 
             logits = model(seq_in)
 
             loss = loss_fn(logits, seq_out)
-
-            loss.backward()
-            optimizer.step()
-
             train_loss += loss.item() # TODO fix so the value doesnt below
 
-            batch_info_str = f'File {data_path}, batch {batch_idx} completed with train loss: {loss.item():.6f}'
+            loss.backward()
+            if ((batch_idx+1) % (BATCH_SIZE//ACCUMULATE_BATCH_SIZE)) == 0 or batch_idx+1 == total_batches:
+                optimizer.step()
+                optimizer.zero_grad()
+
+            batch_info_str = f'File {file_num+1}/{len(training_files)} ({data_path}), batch {batch_idx} completed with train loss: {loss.item():.5f}'
             logger.info(batch_info_str)
             prog_bar.set_description(batch_info_str)
+
+        # TODO checkpointing
 
 
 

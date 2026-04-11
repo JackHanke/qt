@@ -1,6 +1,13 @@
 import pandas as pd
+from tokenizers import Tokenizer
+
+import torch
 from torch.utils.data import Dataset, DataLoader
 
+tokenizer = Tokenizer.from_file("data/tokenizer.json")
+SEQ_LEN = 512
+tokenizer.enable_truncation(max_length=SEQ_LEN)
+tokenizer.enable_padding(pad_id=1, length=SEQ_LEN+1)
 
 class PretrainDataset(Dataset):
     def __init__(self, data_path: str):
@@ -15,22 +22,15 @@ class PretrainDataset(Dataset):
         return len(self.df)
     
     def __getitem__(self, idx: int):
+        # outputs seq_in, seq_out
         row = self.df.iloc[idx]
+        output = tokenizer.encode(row['text'])
 
-        text = row['text']
-        print(text.strip().lower())
-        print(f'length: {len(text.split())}')
-
+        seq_in, seq_out = output.ids[:-1], output.ids[1:]
         
+        seq_in, seq_out = torch.tensor(seq_in), torch.tensor(seq_out)
 
-
-
-        # lower
-
-        # tokenize
-
-        # 
-        pass
+        return seq_in, seq_out
 
 
 if __name__ == '__main__':
