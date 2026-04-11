@@ -65,7 +65,7 @@ def pretrain():
 
     optimizer = torch.optim.Adam(model.net.parameters(), lr=LEARNING_RATE)
     
-    loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
+    loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING) # TODO ignore pad token
 
     train_loss = 0
     for data_path in os.listdir(DATA_ROOT):

@@ -6,7 +6,10 @@ class PretrainDataset(Dataset):
     def __init__(self, data_path: str):
         self.data_path = data_path
         self.df = pd.read_parquet(self.data_path)
-        self.df = self.df[self.df['language'] == 'en'] # filter to english only
+        # preprocess
+        self.df = self.df[self.df['language'] == 'en']
+        self.df['text'] = self.df['text'].str.lower()
+        self.df['text'] = self.df['text'].str.replace(r"[^a-z0-9 [:space:][:punct:]]", '', regex=True)
 
     def __len__(self):
         return len(self.df)

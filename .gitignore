@@ -212,6 +212,7 @@ data/dev/*
 !data/dev/.gitkeep
 data/train/*
 !data/train/.gitkeep
+data/temp
 
 models/checkpoints/*
 !models/checkpoints/.gitkeep
