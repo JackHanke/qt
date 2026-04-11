@@ -15,6 +15,17 @@ qt (pronounced "cutie") is a 1 billion parameter from-scratch uncased english-on
 
 ## Model
 
+Parameters: `1.018B`
+
+`d_model = 1792`
+
+`ffw_size = 7168`
+
+`kv_size = 128`
+
+`n_heads = 14`
+
+`n_layers = 23`
 
 
 ## Data
@@ -33,3 +44,8 @@ For pretraining, I use the [fineweb-edu](https://huggingface.co/datasets/Hugging
 - warmup, cosine scheduler, 
 - gradient clipping
 - checkpointing ... when?
+
+## Resources
+- [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)
+- [Tensor Programs V: Tuning Large Neural Networks via Zero-Shot Hyperparameter Transfer](https://arxiv.org/abs/2203.03466)
+
