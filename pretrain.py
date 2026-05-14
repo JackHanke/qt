@@ -3,6 +3,7 @@ import logging
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
+from math import ceil
 
 import torch
 from torchinfo import summary
@@ -29,8 +30,10 @@ def pretrain():
 
     # configs
     DATA_ROOT = Path(f'data/dev/')
-    BATCH_SIZE = 1_000 # number of sequences, not number of tokens
-    ACCUMULATE_BATCH_SIZE = 25
+    EFFECTIVE_BATCH_SIZE = 1_000 # number of sequences, not number of tokens
+    TRUE_BATCH_SIZE = 25
+    accumulate_every = EFFECTIVE_BATCH_SIZE // TRUE_BATCH_SIZE
+
     LEARNING_RATE = 1e-5
     LABEL_SMOOTHING = 0.0
 
@@ -43,8 +46,8 @@ def pretrain():
     logger.info(f'Starting experiment: {experiment_start_time_str} on device: {DEVICE}')
     logger.info(f'''CONFIGS
     Training Configs:
-        BATCH_SIZE:            {BATCH_SIZE}
-        ACCUMULATE_BATCH_SIZE: {ACCUMULATE_BATCH_SIZE}
+        EFFECTIVE_BATCH_SIZE:  {EFFECTIVE_BATCH_SIZE}
+        TRUE_BATCH_SIZE:       {TRUE_BATCH_SIZE}
         LABEL_SMOOTHING:       {LABEL_SMOOTHING}
     Model Configs:
         D_MODEL:               {D_MODEL}
@@ -70,13 +73,12 @@ def pretrain():
     
     loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING, ignore_index=1) # TODO ignore pad token
 
-    train_loss = 0
-    training_files = os.listdir(DATA_ROOT)
+    training_files = sorted(os.listdir(DATA_ROOT))
     for file_num, data_path in enumerate(training_files):
         dataset = PretrainDataset(data_path=DATA_ROOT/data_path)
-        dataloader = DataLoader(dataset, batch_size=ACCUMULATE_BATCH_SIZE, shuffle=False, pin_memory=True)
+        dataloader = DataLoader(dataset, batch_size=TRUE_BATCH_SIZE, shuffle=False, pin_memory=True, drop_last=False)
 
-        total_batches = (len(dataset)//ACCUMULATE_BATCH_SIZE)+1
+        total_batches = ceil(len(dataset)/TRUE_BATCH_SIZE)
         prog_bar = tqdm(enumerate(dataloader), total=total_batches)
         for batch_idx, (seq_in, seq_out) in prog_bar:
             seq_in = seq_in.to(DEVICE, non_blocking=True)
@@ -85,18 +87,25 @@ def pretrain():
             logits = model(seq_in)
 
             loss = loss_fn(logits, seq_out)
-            train_loss += loss.item() # TODO fix so the value doesnt below
-
+            loss = loss / accumulate_every
             loss.backward()
-            if ((batch_idx+1) % (BATCH_SIZE//ACCUMULATE_BATCH_SIZE)) == 0 or batch_idx+1 == total_batches:
+
+            if ((batch_idx+1) % accumulate_every) == 0 or batch_idx+1 == total_batches:
                 optimizer.step()
                 optimizer.zero_grad()
 
-            batch_info_str = f'File {file_num+1}/{len(training_files)} ({data_path}), batch {batch_idx} completed with train loss: {loss.item():.5f}'
-            logger.info(batch_info_str)
-            prog_bar.set_description(batch_info_str)
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} done with train loss: {loss.item():.5f}'
+                logger.info(batch_info_str)
+                prog_bar.set_description(batch_info_str)
+            else:
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} accumulated with train loss: {loss.item():.5f}'
+                logger.info(batch_info_str)
+                prog_bar.set_description(batch_info_str)
 
-        # TODO checkpointing
+        # checkpointing
+        checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num}_pretrain_qt.pt'
+        torch.save(qt.state_dict(), checkpoint_path)
+   
 
 
 

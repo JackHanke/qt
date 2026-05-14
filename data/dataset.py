@@ -1,5 +1,6 @@
 import pandas as pd
 from tokenizers import Tokenizer
+from tokenizers.processors import TemplateProcessing
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -8,12 +9,23 @@ tokenizer = Tokenizer.from_file("data/tokenizer.json")
 SEQ_LEN = 512
 tokenizer.enable_truncation(max_length=SEQ_LEN)
 tokenizer.enable_padding(pad_id=1, length=SEQ_LEN+1)
+# tokenizer.post_processor = TemplateProcessing(
+#     single="[BOS] $A [EOS]",
+#     special_tokens=[("[BOS]", 1), ("[EOS]", 2)],
+# )
 
 class PretrainDataset(Dataset):
     def __init__(self, data_path: str):
+        punctuation_map = {
+            0x201C: 0x22,  # LEFT DOUBLE QUOTATION MARK -> "
+            0x201D: 0x22,  # RIGHT DOUBLE QUOTATION MARK -> "
+            0x2018: 0x27,  # LEFT SINGLE QUOTATION MARK -> '
+            0x2019: 0x27,  # RIGHT SINGLE QUOTATION MARK -> '
+        }
         self.data_path = data_path
         self.df = pd.read_parquet(self.data_path)
         # preprocess
+        self.df['text'] = self.df['text'].str.translate(punctuation_map)
         self.df = self.df[self.df['language'] == 'en']
         self.df['text'] = self.df['text'].str.lower()
         self.df['text'] = self.df['text'].str.replace(r"[^a-z0-9 [:space:][:punct:]]", '', regex=True)
