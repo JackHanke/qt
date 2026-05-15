@@ -34,7 +34,7 @@ def pretrain():
     TRUE_BATCH_SIZE = 25
     accumulate_every = EFFECTIVE_BATCH_SIZE // TRUE_BATCH_SIZE
 
-    LEARNING_RATE = 1e-5
+    LEARNING_RATE = 1e-5 # TODO scheduler, warmup and cosine warmdown
     LABEL_SMOOTHING = 0.0
 
     D_MODEL = 1792
