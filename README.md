@@ -11,14 +11,14 @@
            \/__/                                                  
 ```
 
-qt (pronounced "cutie") is a 1 billion parameter from-scratch uncased english-only language model.
+qt (pronounced "cutie") is a 1 billion parameter hand coded, from-scratch uncased english-only language model.
 
 ## Model Card
 
-qt is a dense decoder-only transformer with RoPE position embeddings.
+qt is a dense MHA decoder-only transformer with RoPE position embeddings.
 
 ```
-Vocab Size: 13,000
+Vocab Size: 10,001
 Parameters: 1.018B
     Embedding: 
     Non-embedding: 
@@ -44,7 +44,7 @@ TODO
 
 ## Tokenizer
 
-Custom HuggingFace tokenizer trained on uncased english with a vocab_size of 13,000, stored at `data/tokenizer.json`.
+Custom HuggingFace tokenizer trained on uncased english with a vocab_size of 10,001, stored at `data/tokenizer.json`.
 
 ## TODOs
 

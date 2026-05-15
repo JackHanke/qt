@@ -2,6 +2,13 @@ import math
 import torch
 import torch.nn as nn
 
+class qtLayer(nn.Module):
+    def __init__(self):
+        super(qtLayer, self).__init__()
+
+    def forward(self, x):
+        pass
+    
 class PositionalEncoding(nn.Module):
 
     def __init__(self, embed_dim: int, max_len: int = 50000):
