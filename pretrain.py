@@ -41,7 +41,7 @@ def pretrain():
     N_LAYERS = 23
     N_HEADS = 14
     SEQ_LEN = 512
-    NUM_EMBEDDINGS = 13_000
+    NUM_EMBEDDINGS = 10_001
 
     logger.info(f'Starting experiment: {experiment_start_time_str} on device: {DEVICE}')
     logger.info(f'''CONFIGS

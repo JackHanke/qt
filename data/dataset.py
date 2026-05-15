@@ -25,8 +25,8 @@ class PretrainDataset(Dataset):
         self.data_path = data_path
         self.df = pd.read_parquet(self.data_path)
         # preprocess
-        self.df['text'] = self.df['text'].str.translate(punctuation_map)
         self.df = self.df[self.df['language'] == 'en']
+        self.df['text'] = self.df['text'].str.translate(punctuation_map)
         self.df['text'] = self.df['text'].str.lower()
         self.df['text'] = self.df['text'].str.replace(r"[^a-z0-9 [:space:][:punct:]]", '', regex=True)
 
