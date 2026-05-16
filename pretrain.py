@@ -38,7 +38,7 @@ def pretrain():
     LABEL_SMOOTHING = 0.0
 
     D_MODEL = 1792
-    N_LAYERS = 23
+    N_LAYERS = 25
     N_HEADS = 14
     SEQ_LEN = 512
     NUM_EMBEDDINGS = 10_001
