@@ -29,17 +29,25 @@ def pretrain():
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
     # configs
-    DATA_ROOT = Path(f'data/dev/')
+    DATA_ROOT = Path(f'data/train/')
     EFFECTIVE_BATCH_SIZE = 1_000 # number of sequences, not number of tokens
-    TRUE_BATCH_SIZE = 25
+    # TRUE_BATCH_SIZE = 25
+    TRUE_BATCH_SIZE = 75
     accumulate_every = EFFECTIVE_BATCH_SIZE // TRUE_BATCH_SIZE
 
     LEARNING_RATE = 1e-5 # TODO scheduler, warmup and cosine warmdown
     LABEL_SMOOTHING = 0.0
 
-    D_MODEL = 1792
-    N_LAYERS = 25
+    ### qt quarter
+    D_MODEL = 896
+    N_LAYERS = 15
     N_HEADS = 14
+
+    ### qt ()
+    # D_MODEL = 1792
+    # N_LAYERS = 25
+    # N_HEADS = 14
+
     SEQ_LEN = 512
     NUM_EMBEDDINGS = 10_001
 
@@ -66,6 +74,8 @@ def pretrain():
         num_embeddings=NUM_EMBEDDINGS,
         device=DEVICE
     ).to(DEVICE).to(dtype=torch.bfloat16)
+    model.compile()
+
     model_summary_str = str(summary(model))
     logger.info('\n'+model_summary_str)
 
@@ -81,34 +91,36 @@ def pretrain():
         total_batches = ceil(len(dataset)/TRUE_BATCH_SIZE)
         prog_bar = tqdm(enumerate(dataloader), total=total_batches)
         for batch_idx, (seq_in, seq_out) in prog_bar:
+            optimizer.zero_grad()
+
             seq_in = seq_in.to(DEVICE, non_blocking=True)
             seq_out = seq_out.to(DEVICE, non_blocking=True)
 
             logits = model(seq_in)
 
             loss = loss_fn(logits, seq_out)
+            loss_val = loss.item()
             loss = loss / accumulate_every
             loss.backward()
 
-            if ((batch_idx+1) % accumulate_every) == 0 or batch_idx+1 == total_batches:
+            if ((batch_idx+1) % accumulate_every) == 0 or (batch_idx+1) == total_batches:
                 optimizer.step()
                 optimizer.zero_grad()
 
-                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} done with train loss: {loss.item():.5f}'
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} done with train loss: {loss_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
             else:
-                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} accumulated with train loss: {loss.item():.5f}'
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} accumulated with train loss: {loss_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 
         # checkpointing
         checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num}_pretrain_qt.pt'
         torch.save(qt.state_dict(), checkpoint_path)
+        logger.info(f'Checkpointed at: {checkpoint_path}')
    
 
-
-
-
 if __name__ == '__main__':
+
     pretrain()
