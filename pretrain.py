@@ -30,12 +30,13 @@ def pretrain():
 
     # configs
     DATA_ROOT = Path(f'data/train/')
-    EFFECTIVE_BATCH_SIZE = 1_000 # number of sequences, not number of tokens
+    # EFFECTIVE_BATCH_SIZE = 1_000 # number of sequences, not number of tokens
+    EFFECTIVE_BATCH_SIZE = 500 # number of sequences, not number of tokens
     # TRUE_BATCH_SIZE = 25
-    TRUE_BATCH_SIZE = 75
+    TRUE_BATCH_SIZE = 50
     accumulate_every = EFFECTIVE_BATCH_SIZE // TRUE_BATCH_SIZE
 
-    LEARNING_RATE = 1e-5 # TODO scheduler, warmup and cosine warmdown
+    LEARNING_RATE = 1e-4 # TODO scheduler, warmup and cosine warmdown
     LABEL_SMOOTHING = 0.0
 
     ### qt quarter
@@ -80,6 +81,11 @@ def pretrain():
     logger.info('\n'+model_summary_str)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+    warmup_steps = 1_000
+    scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_steps
+    )
     
     loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING, ignore_index=1) # TODO ignore pad token
 
@@ -104,20 +110,23 @@ def pretrain():
             loss.backward()
 
             if ((batch_idx+1) % accumulate_every) == 0 or (batch_idx+1) == total_batches:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
                 optimizer.step()
+                scheduler.step()
                 optimizer.zero_grad()
 
                 batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} done with train loss: {loss_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
             else:
-                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} accumulated with train loss: {loss_val:.5f}'
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} accd with train loss: {loss_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 
         # checkpointing
         checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num}_pretrain_qt.pt'
-        torch.save(qt.state_dict(), checkpoint_path)
+        torch.save(model.state_dict(), checkpoint_path)
         logger.info(f'Checkpointed at: {checkpoint_path}')
    
 
