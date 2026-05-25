@@ -15,23 +15,20 @@ qt (pronounced "cutie") is a 1 billion parameter hand coded, from-scratch uncase
 
 ## Model Card
 
-qt is a dense MHA decoder-only transformer with [PoPE](https://arxiv.org/abs/2509.10534) position embeddings.
-
-[RMSNorm](https://arxiv.org/abs/1910.07467)
+qt is a dense GQA ALiBi/NoPE flash attn transformer. We use [RMSNorm](https://arxiv.org/abs/1910.07467) and GELU activations.
 
 ```
 Vocab Size: 10,001
-Parameters: 1.018B
+Parameters: 1.01B
     Embedding: 
     Non-embedding: 
-d_model = 1792
-ffw_size = 7168
-kv_size = 128
-n_heads = 14
-n_layers = 23
+d_model = 2048
+ffw_size = 8196
+n_heads = 32
+n_heads_kv = 8
+n_layers = 22
 seq_len = 512
 ```
-
 
 ## Data
 
