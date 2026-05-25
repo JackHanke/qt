@@ -1,9 +1,9 @@
 import os
 import logging
 from tqdm import tqdm
+from math import ceil
 from pathlib import Path
 from datetime import datetime
-from math import ceil
 
 import torch
 from torchinfo import summary
@@ -30,19 +30,22 @@ def pretrain():
 
     # configs
     DATA_ROOT = Path(f'data/train/')
-    # EFFECTIVE_BATCH_SIZE = 1_000 # number of sequences, not number of tokens
-    EFFECTIVE_BATCH_SIZE = 500 # number of sequences, not number of tokens
-    # TRUE_BATCH_SIZE = 25
-    TRUE_BATCH_SIZE = 50
+    EFFECTIVE_BATCH_SIZE = 2_025 # number of sequences, not number of tokens
+    # EFFECTIVE_BATCH_SIZE = 500 # number of sequences, not number of tokens
+    TRUE_BATCH_SIZE = 27
+    # TRUE_BATCH_SIZE = 50
     accumulate_every = EFFECTIVE_BATCH_SIZE // TRUE_BATCH_SIZE
 
-    LEARNING_RATE = 1e-4 # TODO scheduler, warmup and cosine warmdown
+    LEARNING_RATE = 5e-4
+    BETA_1 = 0.9
+    BETA_2 = 0.95
+    CLIP_NORM = 1.0
     LABEL_SMOOTHING = 0.0
 
     ### qt quarter
-    D_MODEL = 896
-    N_LAYERS = 15
-    N_HEADS = 14
+    D_MODEL = 640
+    N_LAYERS = 16
+    N_HEADS = 10
 
     ### qt ()
     # D_MODEL = 1792
@@ -52,19 +55,25 @@ def pretrain():
     SEQ_LEN = 512
     NUM_EMBEDDINGS = 10_001
 
-    logger.info(f'Starting experiment: {experiment_start_time_str} on device: {DEVICE}')
-    logger.info(f'''CONFIGS
+    configs_str = f'''Starting experiment: {experiment_start_time_str} on device: {DEVICE}
+    CONFIGS
     Training Configs:
         EFFECTIVE_BATCH_SIZE:  {EFFECTIVE_BATCH_SIZE}
         TRUE_BATCH_SIZE:       {TRUE_BATCH_SIZE}
+        accumulate_every:      {accumulate_every}
         LABEL_SMOOTHING:       {LABEL_SMOOTHING}
+        BETA_1:                {BETA_1}
+        BETA_2:                {BETA_2}
+        CLIP_NORM:             {CLIP_NORM}
     Model Configs:
         D_MODEL:               {D_MODEL}
         N_LAYERS:              {N_LAYERS}
         N_HEADS:               {N_HEADS}
         SEQ_LEN:               {SEQ_LEN}
         NUM_EMBEDDINGS:        {NUM_EMBEDDINGS}
-    ''')
+    '''
+    print(configs_str)
+    logger.info(configs_str)
 
     model = qt(
         d_model=D_MODEL,
@@ -74,17 +83,32 @@ def pretrain():
         seq_len=SEQ_LEN,
         num_embeddings=NUM_EMBEDDINGS,
         device=DEVICE
-    ).to(DEVICE).to(dtype=torch.bfloat16)
+    ).to(dtype=torch.bfloat16).to(DEVICE)
     model.compile()
 
     model_summary_str = str(summary(model))
     logger.info('\n'+model_summary_str)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=(BETA_1, 0.95), weight_decay=0.1)
+
+    total_steps = 20_972
 
     warmup_steps = 1_000
-    scheduler = torch.optim.lr_scheduler.LinearLR(
-        optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_steps
+    cooldown_steps = 1_000
+    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup_steps
+    )
+    constant_scheduler = torch.optim.lr_scheduler.ConstantLR(
+        optimizer, factor=1.0, total_iters=(total_steps-warmup_steps-cooldown_steps)
+    )
+    cooldown_scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=1.0, end_factor=0.01, total_iters=cooldown_steps
+    )
+
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, constant_scheduler, cooldown_scheduler],
+        milestones=[warmup_steps, (total_steps-cooldown_steps)]
     )
     
     loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING, ignore_index=1) # TODO ignore pad token
@@ -92,13 +116,11 @@ def pretrain():
     training_files = sorted(os.listdir(DATA_ROOT))
     for file_num, data_path in enumerate(training_files):
         dataset = PretrainDataset(data_path=DATA_ROOT/data_path)
-        dataloader = DataLoader(dataset, batch_size=TRUE_BATCH_SIZE, shuffle=False, pin_memory=True, drop_last=False)
+        dataloader = DataLoader(dataset, batch_size=TRUE_BATCH_SIZE, shuffle=False, pin_memory=True, drop_last=True)
 
         total_batches = ceil(len(dataset)/TRUE_BATCH_SIZE)
         prog_bar = tqdm(enumerate(dataloader), total=total_batches)
         for batch_idx, (seq_in, seq_out) in prog_bar:
-            optimizer.zero_grad()
-
             seq_in = seq_in.to(DEVICE, non_blocking=True)
             seq_out = seq_out.to(DEVICE, non_blocking=True)
 
@@ -109,8 +131,8 @@ def pretrain():
             loss = loss / accumulate_every
             loss.backward()
 
-            if ((batch_idx+1) % accumulate_every) == 0 or (batch_idx+1) == total_batches:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            if ((batch_idx+1) % accumulate_every) == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CLIP_NORM)
 
                 optimizer.step()
                 scheduler.step()
@@ -125,7 +147,7 @@ def pretrain():
                 prog_bar.set_description(batch_info_str)
 
         # checkpointing
-        checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num}_pretrain_qt.pt'
+        checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num}_pretrain_qt.pth'
         torch.save(model.state_dict(), checkpoint_path)
         logger.info(f'Checkpointed at: {checkpoint_path}')
    
