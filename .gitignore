@@ -222,4 +222,4 @@ models/checkpoints/*
 logs/*
 !logs/.gitkeep
 
-
+flashattn

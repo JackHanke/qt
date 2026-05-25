@@ -28,9 +28,9 @@ class qt(nn.Module):
     def __init__(
             self,
             d_model: int,
-            ffw_size: int,
             n_layers: int,
             n_heads: int,
+            n_heads_kv: int,
             seq_len: int,
             num_embeddings: int,
             device,
@@ -38,7 +38,7 @@ class qt(nn.Module):
         super(qt, self).__init__()
 
         self.d_model = d_model
-        self.ffw_size = ffw_size
+        self.ffw_size = 4*d_model
         self.n_layers = n_layers
         self.n_heads = n_heads
         self.seq_len = seq_len
@@ -61,7 +61,7 @@ class qt(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=n_heads,
-            dim_feedforward=ffw_size,
+            dim_feedforward=self.ffw_size,
             batch_first=True
         )
         self.decoder = nn.TransformerEncoder(

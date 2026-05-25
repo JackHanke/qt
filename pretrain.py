@@ -9,7 +9,7 @@ import torch
 from torchinfo import summary
 from torch.utils.data import DataLoader
 
-from models.qt import qt
+from qt import qt
 from data.dataset import PretrainDataset
 
 
@@ -30,30 +30,28 @@ def pretrain():
 
     # configs
     DATA_ROOT = Path(f'data/train/')
-    EFFECTIVE_BATCH_SIZE = 2_025 # number of sequences, not number of tokens
-    # EFFECTIVE_BATCH_SIZE = 500 # number of sequences, not number of tokens
-    TRUE_BATCH_SIZE = 27
-    # TRUE_BATCH_SIZE = 50
-    accumulate_every = EFFECTIVE_BATCH_SIZE // TRUE_BATCH_SIZE
+    TRUE_BATCH_SIZE = 30
+    accumulate_every = ceil(2_000/TRUE_BATCH_SIZE)
+    EFFECTIVE_BATCH_SIZE = accumulate_every*TRUE_BATCH_SIZE
 
-    LEARNING_RATE = 5e-4
+    LEARNING_RATE = 2.5e-4
     BETA_1 = 0.9
     BETA_2 = 0.95
+    WEIGHT_DECAY = 0.1
     CLIP_NORM = 1.0
     LABEL_SMOOTHING = 0.0
 
-    ### qt quarter
-    D_MODEL = 640
-    N_LAYERS = 16
-    N_HEADS = 10
-
-    ### qt ()
-    # D_MODEL = 1792
-    # N_LAYERS = 25
-    # N_HEADS = 14
+    ### qt config
+    D_MODEL = 2048
+    N_LAYERS = 1
+    N_HEADS = 32
+    N_HEADS_KV = 8 
 
     SEQ_LEN = 512
     NUM_EMBEDDINGS = 10_001
+
+    warmup_steps = 1_000
+    cooldown_steps = 2_000
 
     configs_str = f'''Starting experiment: {experiment_start_time_str} on device: {DEVICE}
     CONFIGS
@@ -64,11 +62,15 @@ def pretrain():
         LABEL_SMOOTHING:       {LABEL_SMOOTHING}
         BETA_1:                {BETA_1}
         BETA_2:                {BETA_2}
+        WEIGHT_DECAY:          {WEIGHT_DECAY}
         CLIP_NORM:             {CLIP_NORM}
+        WSD Warmup Steps:      {warmup_steps}
+        WSD Cooldown Steps:    {cooldown_steps}
     Model Configs:
         D_MODEL:               {D_MODEL}
         N_LAYERS:              {N_LAYERS}
         N_HEADS:               {N_HEADS}
+        N_HEADS_KV:            {N_HEADS_KV}
         SEQ_LEN:               {SEQ_LEN}
         NUM_EMBEDDINGS:        {NUM_EMBEDDINGS}
     '''
@@ -80,6 +82,7 @@ def pretrain():
         ffw_size=4*D_MODEL,
         n_layers=N_LAYERS,
         n_heads=N_HEADS,
+        n_heads_kv=N_HEADS_KV,
         seq_len=SEQ_LEN,
         num_embeddings=NUM_EMBEDDINGS,
         device=DEVICE
@@ -89,12 +92,10 @@ def pretrain():
     model_summary_str = str(summary(model))
     logger.info('\n'+model_summary_str)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=(BETA_1, 0.95), weight_decay=0.1)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=(BETA_1, BETA_2), weight_decay=WEIGHT_DECAY)
 
-    total_steps = 20_972
-
-    warmup_steps = 1_000
-    cooldown_steps = 1_000
+    total_steps = 20_854
+    
     warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
         optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup_steps
     )
@@ -118,7 +119,9 @@ def pretrain():
         dataset = PretrainDataset(data_path=DATA_ROOT/data_path)
         dataloader = DataLoader(dataset, batch_size=TRUE_BATCH_SIZE, shuffle=False, pin_memory=True, drop_last=True)
 
-        total_batches = ceil(len(dataset)/TRUE_BATCH_SIZE)
+        optimizer.zero_grad()
+
+        total_batches = len(dataset)//TRUE_BATCH_SIZE
         prog_bar = tqdm(enumerate(dataloader), total=total_batches)
         for batch_idx, (seq_in, seq_out) in prog_bar:
             seq_in = seq_in.to(DEVICE, non_blocking=True)
@@ -141,6 +144,9 @@ def pretrain():
                 batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} done with train loss: {loss_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
+
+                # break out early for batch rounding
+                if batch_idx == ((len(dataset) // EFFECTIVE_BATCH_SIZE)*accumulate_every - 1): break
             else:
                 batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} accd with train loss: {loss_val:.5f}'
                 logger.info(batch_info_str)

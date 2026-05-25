@@ -10,7 +10,8 @@ import torch
 from torchinfo import summary
 from torch.utils.data import DataLoader
 
-from models.qt import qt
+from qt import qt
+# from models.debug import qt
 from data.dataset import PretrainDataset
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -32,25 +33,30 @@ LABEL_SMOOTHING = 0.0
 # TRUE_BATCH_SIZE = 27
 
 ### qt ()
-D_MODEL = 1792
-N_LAYERS = 25
-N_HEADS = 14
-EFFECTIVE_BATCH_SIZE = 2_025 # number of sequences, not number of tokens
-TRUE_BATCH_SIZE = 25
+D_MODEL = 2048
+N_LAYERS = 22
+N_HEADS = 32
+N_HEADS_KV = 8 
+TRUE_BATCH_SIZE = 29
+EFFECTIVE_BATCH_SIZE = ceil(2_000/TRUE_BATCH_SIZE)*TRUE_BATCH_SIZE # number of sequences, not number of tokens
 
 accumulate_every = EFFECTIVE_BATCH_SIZE // TRUE_BATCH_SIZE
 SEQ_LEN = 512
 NUM_EMBEDDINGS = 10_001
 
+print(f'accumulate_every: {accumulate_every}')
+
 model = qt(
     d_model=D_MODEL,
     n_layers=N_LAYERS,
     n_heads=N_HEADS,
+    n_heads_kv=N_HEADS_KV,
     seq_len=SEQ_LEN,
     num_embeddings=NUM_EMBEDDINGS,
     device=DEVICE
 ).to(dtype=torch.bfloat16).to(DEVICE)
 model.compile()
+model_summary_str = str(summary(model))
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=(BETA_1, 0.95), weight_decay=0.1)
 
@@ -120,6 +126,7 @@ for file_num, data_path in enumerate(training_files):
 
 
         if ((batch_idx+1) % accumulate_every) == 0:
+            print(f'optim running at batch {batch_idx}')
             optim_start = time()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CLIP_NORM)
 
