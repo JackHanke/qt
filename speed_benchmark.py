@@ -60,6 +60,8 @@ model_summary_str = str(summary(model))
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=(BETA_1, 0.95), weight_decay=0.1)
 
+scaler = torch.amp.GradScaler()
+
 total_steps = 20_972
 
 warmup_steps = 1_000
@@ -107,19 +109,23 @@ for file_num, data_path in enumerate(training_files):
         data_to_gpu.append(tim)
 
         forward_pass_start = time()
-        logits = model(seq_in)
-        tim = time()-forward_pass_start
-        # print(f'{batch_idx} forward pass: {tim}')
-        forward_passes.append(tim)
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            logits = model(seq_in)
 
-        calc_loss_start = time()
-        loss = loss_fn(logits, seq_out)
-        # loss_val = loss.item()
-        loss = loss / accumulate_every
-        calc_losses.append(time()-calc_loss_start)
+            tim = time()-forward_pass_start
+            # print(f'{batch_idx} forward pass: {tim}')
+            forward_passes.append(tim)
+
+            calc_loss_start = time()
+            loss = loss_fn(logits, seq_out)
+            loss_val = loss.item()
+            prog_bar.set_description(f'loss {loss_val:.6f}')
+            loss = loss / accumulate_every
+            calc_losses.append(time()-calc_loss_start)
 
         backward_pass_start = time()
         loss.backward()
+        # scaler.scale(loss).backward()
         tim = time()-backward_pass_start
         # print(f'{batch_idx} backward pass: {tim}')
         backward_passes.append(tim)
@@ -127,11 +133,14 @@ for file_num, data_path in enumerate(training_files):
 
         if ((batch_idx+1) % accumulate_every) == 0:
             print(f'optim running at batch {batch_idx}')
+            # scaler.unscale_(optimizer)
             optim_start = time()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CLIP_NORM)
 
+            # scaler.step(optimizer)
             optimizer.step()
             scheduler.step()
+            # scaler.update()
             optimizer.zero_grad()
 
             # batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{total_batches} done with train loss: {loss_val:.5f}'

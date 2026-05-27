@@ -1,5 +1,7 @@
 import os
 import logging
+import numpy as np
+import random
 from tqdm import tqdm
 from math import ceil
 from pathlib import Path
@@ -12,6 +14,13 @@ from torch.utils.data import DataLoader
 from qt import qt
 from data.dataset import PretrainDataset
 
+
+
+def init_weights(m, mean: float, std: float):
+    if isinstance(m, torch.nn.Linear):
+        torch.nn.init.normal_(m.weight, mean=mean, std=std)
+        if m.bias is not None:
+            torch.nn.init.zeros_(m.bias)
 
 def pretrain():
     experiment_start_time = datetime.now()
@@ -30,7 +39,7 @@ def pretrain():
 
     # configs
     DATA_ROOT = Path(f'data/train/')
-    TRUE_BATCH_SIZE = 30
+    TRUE_BATCH_SIZE = 29
     accumulate_every = ceil(2_000/TRUE_BATCH_SIZE)
     EFFECTIVE_BATCH_SIZE = accumulate_every*TRUE_BATCH_SIZE
 
@@ -43,12 +52,20 @@ def pretrain():
 
     ### qt config
     D_MODEL = 2048
-    N_LAYERS = 1
+    N_LAYERS = 22
     N_HEADS = 32
     N_HEADS_KV = 8 
 
+    INIT_MEAN = 0.0
+    INIT_STD = 0.02
+
     SEQ_LEN = 512
     NUM_EMBEDDINGS = 10_001
+
+    SEED = 0
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
 
     warmup_steps = 1_000
     cooldown_steps = 2_000
@@ -56,6 +73,7 @@ def pretrain():
     configs_str = f'''Starting experiment: {experiment_start_time_str} on device: {DEVICE}
     CONFIGS
     Training Configs:
+        SEED:                  {SEED}
         EFFECTIVE_BATCH_SIZE:  {EFFECTIVE_BATCH_SIZE}
         TRUE_BATCH_SIZE:       {TRUE_BATCH_SIZE}
         accumulate_every:      {accumulate_every}
@@ -73,26 +91,33 @@ def pretrain():
         N_HEADS_KV:            {N_HEADS_KV}
         SEQ_LEN:               {SEQ_LEN}
         NUM_EMBEDDINGS:        {NUM_EMBEDDINGS}
+        INIT_MEAN:             {INIT_MEAN}
+        INIT_STD:              {INIT_STD}
     '''
-    print(configs_str)
+    # print(configs_str)
     logger.info(configs_str)
 
     model = qt(
         d_model=D_MODEL,
-        ffw_size=4*D_MODEL,
+        # ffw_size=4*D_MODEL,
         n_layers=N_LAYERS,
         n_heads=N_HEADS,
         n_heads_kv=N_HEADS_KV,
         seq_len=SEQ_LEN,
         num_embeddings=NUM_EMBEDDINGS,
         device=DEVICE
-    ).to(dtype=torch.bfloat16).to(DEVICE)
+    ).to(DEVICE)
+    model.apply(init_weights)
     model.compile()
 
     model_summary_str = str(summary(model))
     logger.info('\n'+model_summary_str)
 
+    print(configs_str)
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=(BETA_1, BETA_2), weight_decay=WEIGHT_DECAY)
+
+    scaler = torch.amp.GradScaler()
 
     total_steps = 20_854
     
@@ -121,34 +146,49 @@ def pretrain():
 
         optimizer.zero_grad()
 
-        total_batches = len(dataset)//TRUE_BATCH_SIZE
-        prog_bar = tqdm(enumerate(dataloader), total=total_batches)
+        loss_batch_val, loss_batch_val_temp = 0, 0
+
+        # total_batches = len(dataset)//TRUE_BATCH_SIZE
+        total_iters_per_file = (len(dataset) // EFFECTIVE_BATCH_SIZE)*accumulate_every
+        prog_bar = tqdm(enumerate(dataloader), total=total_iters_per_file)
         for batch_idx, (seq_in, seq_out) in prog_bar:
             seq_in = seq_in.to(DEVICE, non_blocking=True)
             seq_out = seq_out.to(DEVICE, non_blocking=True)
 
-            logits = model(seq_in)
 
-            loss = loss_fn(logits, seq_out)
-            loss_val = loss.item()
-            loss = loss / accumulate_every
-            loss.backward()
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                logits = model(seq_in)
+
+                loss = loss_fn(logits, seq_out)
+                loss_val = loss.item()
+                loss = loss / accumulate_every
+
+                # TODO NaN, inf checking
+
+            loss_batch_val_temp += loss.item() / accumulate_every
+            # loss.backward()
+            scaler.scale(loss).backward()
 
             if ((batch_idx+1) % accumulate_every) == 0:
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CLIP_NORM)
 
-                optimizer.step()
+                scaler.step(optimizer)
                 scheduler.step()
+                scaler.update()
                 optimizer.zero_grad()
 
-                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} done with train loss: {loss_val:.5f}'
+                loss_batch_val = loss_batch_val_temp
+                loss_batch_val_temp = 0
+
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{total_iters_per_file} done tbl: {loss_val:.5f} til: {loss_batch_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 
                 # break out early for batch rounding
-                if batch_idx == ((len(dataset) // EFFECTIVE_BATCH_SIZE)*accumulate_every - 1): break
+                if batch_idx == (total_iters_per_file - 1): break
             else:
-                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{len(dataset)} accd with train loss: {loss_val:.5f}'
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{total_iters_per_file} accd tbl: {loss_val:.5f} til: {loss_batch_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 

@@ -62,7 +62,7 @@ class qt(nn.Module):
                 fused_bias_fc=False,
                 use_flash_attn=True,
                 device=device,
-                dtype=torch.bfloat16,
+                dtype=None,
             ), # NoPE every 4
             RMSNorm(d_model),
             FeedForward(dim = d_model),
