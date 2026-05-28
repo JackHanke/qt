@@ -48,14 +48,6 @@ TODO
 
 Custom HuggingFace tokenizer trained on uncased english with a vocab_size of 10,001, stored at `data/tokenizer.json`.
 
-## TODOs
-
-- TODO low precision model, .to(dtype=torch.bfloat16) adamw_bfloat16
-- gradient accumulation, 
-- warmup, cosine scheduler, 
-- gradient clipping
-- checkpointing ... when?
-
 ## Resources
 - [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)
 - [Tensor Programs V: Tuning Large Neural Networks via Zero-Shot Hyperparameter Transfer](https://arxiv.org/abs/2203.03466)

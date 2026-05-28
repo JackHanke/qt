@@ -87,12 +87,10 @@ def pretrain():
         INIT_MEAN:             {INIT_MEAN}
         INIT_STD:              {INIT_STD}
     '''
-    # print(configs_str)
     logger.info(configs_str)
 
     model = qt(
         d_model=D_MODEL,
-        # ffw_size=4*D_MODEL,
         n_layers=N_LAYERS,
         n_heads=N_HEADS,
         n_heads_kv=N_HEADS_KV,
@@ -144,7 +142,6 @@ def pretrain():
 
         loss_batch_val, loss_batch_val_temp = 0, 0
 
-        # total_batches = len(dataset)//TRUE_BATCH_SIZE
         total_iters_per_file = (len(dataset) // EFFECTIVE_BATCH_SIZE)*accumulate_every
         prog_bar = tqdm(enumerate(dataloader), total=total_iters_per_file)
         for batch_idx, (seq_in, seq_out) in prog_bar:
@@ -160,16 +157,12 @@ def pretrain():
                 loss = loss / accumulate_every
 
             loss.backward()
-            # scaler.scale(loss).backward()
 
             if ((batch_idx+1) % accumulate_every) == 0:
-                # scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CLIP_NORM)
 
-                # scaler.step(optimizer)
                 optimizer.step()
                 scheduler.step()
-                # scaler.update()
                 optimizer.zero_grad()
 
                 loss_batch_val = loss_batch_val_temp
@@ -179,8 +172,14 @@ def pretrain():
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 
+                if batch_idx == (total_iters_per_file - 1)//2:
+                    checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num}_half_pretrain_qt.pth'
+                    torch.save(model.state_dict(), checkpoint_path)
+                    logger.info(f'Checkpointed at: {checkpoint_path}')
+
                 # break out early for batch rounding
                 if batch_idx == (total_iters_per_file - 1): break
+                
             else:
                 batch_info_str = f'File {file_num+1}/{len(training_files)}, accd train loss iter: {loss_val:.5f} batch: {loss_batch_val:.5f}'
                 logger.info(batch_info_str)
