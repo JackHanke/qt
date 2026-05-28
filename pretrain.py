@@ -15,13 +15,6 @@ from qt import qt
 from data.dataset import PretrainDataset
 
 
-
-def init_weights(m, mean: float, std: float):
-    if isinstance(m, torch.nn.Linear):
-        torch.nn.init.normal_(m.weight, mean=mean, std=std)
-        if m.bias is not None:
-            torch.nn.init.zeros_(m.bias)
-
 def pretrain():
     experiment_start_time = datetime.now()
     experiment_start_time_str = experiment_start_time.strftime("%Y-%m-%d-%H:%M:%S")
@@ -39,7 +32,7 @@ def pretrain():
 
     # configs
     DATA_ROOT = Path(f'data/train/')
-    TRUE_BATCH_SIZE = 29
+    TRUE_BATCH_SIZE = 16
     accumulate_every = ceil(2_000/TRUE_BATCH_SIZE)
     EFFECTIVE_BATCH_SIZE = accumulate_every*TRUE_BATCH_SIZE
 
@@ -62,7 +55,7 @@ def pretrain():
     SEQ_LEN = 512
     NUM_EMBEDDINGS = 10_001
 
-    SEED = 0
+    SEED = 4
     random.seed(SEED)
     np.random.seed(SEED)
     torch.manual_seed(SEED)
@@ -107,6 +100,11 @@ def pretrain():
         num_embeddings=NUM_EMBEDDINGS,
         device=DEVICE
     ).to(DEVICE)
+    def init_weights(m):
+        if isinstance(m, torch.nn.Linear):
+            torch.nn.init.normal_(m.weight, mean=INIT_MEAN, std=INIT_STD)
+            if m.bias is not None:
+                torch.nn.init.zeros_(m.bias)
     model.apply(init_weights)
     model.compile()
 
@@ -116,8 +114,6 @@ def pretrain():
     print(configs_str)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=(BETA_1, BETA_2), weight_decay=WEIGHT_DECAY)
-
-    scaler = torch.amp.GradScaler()
 
     total_steps = 20_854
     
@@ -155,40 +151,38 @@ def pretrain():
             seq_in = seq_in.to(DEVICE, non_blocking=True)
             seq_out = seq_out.to(DEVICE, non_blocking=True)
 
-
             with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
                 logits = model(seq_in)
 
                 loss = loss_fn(logits, seq_out)
                 loss_val = loss.item()
+                loss_batch_val_temp += loss_val / accumulate_every
                 loss = loss / accumulate_every
 
-                # TODO NaN, inf checking
-
-            loss_batch_val_temp += loss.item() / accumulate_every
-            # loss.backward()
-            scaler.scale(loss).backward()
+            loss.backward()
+            # scaler.scale(loss).backward()
 
             if ((batch_idx+1) % accumulate_every) == 0:
-                scaler.unscale_(optimizer)
+                # scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CLIP_NORM)
 
-                scaler.step(optimizer)
+                # scaler.step(optimizer)
+                optimizer.step()
                 scheduler.step()
-                scaler.update()
+                # scaler.update()
                 optimizer.zero_grad()
 
                 loss_batch_val = loss_batch_val_temp
                 loss_batch_val_temp = 0
 
-                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{total_iters_per_file} done tbl: {loss_val:.5f} til: {loss_batch_val:.5f}'
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, done train loss iter: {loss_val:.5f} batch: {loss_batch_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 
                 # break out early for batch rounding
                 if batch_idx == (total_iters_per_file - 1): break
             else:
-                batch_info_str = f'File {file_num+1}/{len(training_files)}, batch {batch_idx+1}/{total_iters_per_file} accd tbl: {loss_val:.5f} til: {loss_batch_val:.5f}'
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, accd train loss iter: {loss_val:.5f} batch: {loss_batch_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 

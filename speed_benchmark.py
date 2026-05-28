@@ -37,7 +37,7 @@ D_MODEL = 2048
 N_LAYERS = 22
 N_HEADS = 32
 N_HEADS_KV = 8 
-TRUE_BATCH_SIZE = 29
+TRUE_BATCH_SIZE = 28
 EFFECTIVE_BATCH_SIZE = ceil(2_000/TRUE_BATCH_SIZE)*TRUE_BATCH_SIZE # number of sequences, not number of tokens
 
 accumulate_every = EFFECTIVE_BATCH_SIZE // TRUE_BATCH_SIZE
@@ -54,13 +54,13 @@ model = qt(
     seq_len=SEQ_LEN,
     num_embeddings=NUM_EMBEDDINGS,
     device=DEVICE
-).to(dtype=torch.bfloat16).to(DEVICE)
+).to(DEVICE)
 model.compile()
 model_summary_str = str(summary(model))
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=(BETA_1, 0.95), weight_decay=0.1)
 
-scaler = torch.amp.GradScaler()
+# scaler = torch.amp.GradScaler()
 
 total_steps = 20_972
 
