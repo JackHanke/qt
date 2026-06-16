@@ -19,6 +19,9 @@ def pretrain():
     experiment_start_time = datetime.now()
     experiment_start_time_str = experiment_start_time.strftime("%Y-%m-%d-%H:%M:%S")
 
+    checkpoint_path = Path(f'./models/checkpoints/{experiment_start_time_str}')
+    if not os.path.exists(checkpoint_path): os.makedirs(checkpoint_path)
+
     logger = logging.getLogger(__name__)
     # logger.addHandler(logging.StreamHandler(sys.stdout))
     logging.basicConfig(
@@ -32,7 +35,10 @@ def pretrain():
 
     # configs
     DATA_ROOT = Path(f'data/train/')
-    MODEL_PATH = Path(f'models/checkpoints/2026-05-27-20:56:31_file_21_pretrain_qt.pth')
+
+    # MODEL_PATH = Path(f'models/checkpoints/2026-05-27-20:56:31_file_21_pretrain_qt.pth')
+    MODEL_PATH = None
+
     TRUE_BATCH_SIZE = 16
     accumulate_every = ceil(2_000/TRUE_BATCH_SIZE)
     EFFECTIVE_BATCH_SIZE = accumulate_every*TRUE_BATCH_SIZE
@@ -118,12 +124,11 @@ def pretrain():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, betas=(BETA_1, BETA_2), weight_decay=WEIGHT_DECAY)
 
-    # total_steps = 20_854
-    total_steps = 6_538
+    total_steps = 20_854 # TODO this should not be hardcoded
     
-    # warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
-    #     optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup_steps
-    # )
+    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup_steps
+    )
     constant_scheduler = torch.optim.lr_scheduler.ConstantLR(
         optimizer, factor=1.0, total_iters=(total_steps-warmup_steps-cooldown_steps)
     )
@@ -131,20 +136,15 @@ def pretrain():
         optimizer, start_factor=1.0, end_factor=0.01, total_iters=cooldown_steps
     )
 
-    # scheduler = torch.optim.lr_scheduler.SequentialLR(
-    #     optimizer,
-    #     schedulers=[warmup_scheduler, constant_scheduler, cooldown_scheduler],
-    #     milestones=[warmup_steps, (total_steps-cooldown_steps)]
-    # )
     scheduler = torch.optim.lr_scheduler.SequentialLR(
         optimizer,
-        schedulers=[constant_scheduler, cooldown_scheduler],
-        milestones=[(total_steps-cooldown_steps)]
+        schedulers=[warmup_scheduler, constant_scheduler, cooldown_scheduler],
+        milestones=[warmup_steps, (total_steps-cooldown_steps)]
     )
     
     loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING, ignore_index=1) # TODO ignore pad token
 
-    training_files = sorted(os.listdir(DATA_ROOT))[22:] 
+    training_files = sorted(os.listdir(DATA_ROOT))
     for file_num, data_path in enumerate(training_files):
         dataset = PretrainDataset(data_path=DATA_ROOT/data_path)
         dataloader = DataLoader(dataset, batch_size=TRUE_BATCH_SIZE, shuffle=False, pin_memory=True, drop_last=True)
@@ -179,12 +179,12 @@ def pretrain():
                 loss_batch_val = loss_batch_val_temp
                 loss_batch_val_temp = 0
 
-                batch_info_str = f'File {file_num+1+22}/{len(training_files)}, done train loss iter: {loss_val:.5f} batch: {loss_batch_val:.5f}'
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, done train loss iter: {loss_val:.5f} batch: {loss_batch_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 
                 if batch_idx == (total_iters_per_file - 1)//2:
-                    checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num+1+22}_half_pretrain_qt.pth'
+                    checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num+1}_half_pretrain_qt.pth'
                     torch.save(model.state_dict(), checkpoint_path)
                     logger.info(f'Checkpointed at: {checkpoint_path}')
 
@@ -192,12 +192,12 @@ def pretrain():
                 if batch_idx == (total_iters_per_file - 1): break
                 
             else:
-                batch_info_str = f'File {file_num+1+22}/{len(training_files)}, accd train loss iter: {loss_val:.5f} batch: {loss_batch_val:.5f}'
+                batch_info_str = f'File {file_num+1}/{len(training_files)}, accd train loss iter: {loss_val:.5f} batch: {loss_batch_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 
         # checkpointing
-        checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num+1+22}_pretrain_qt.pth'
+        checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num+1}_pretrain_qt.pth'
         torch.save(model.state_dict(), checkpoint_path)
         logger.info(f'Checkpointed at: {checkpoint_path}')
    
