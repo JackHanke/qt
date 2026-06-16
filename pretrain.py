@@ -36,8 +36,8 @@ def pretrain():
     # configs
     DATA_ROOT = Path(f'data/train/')
 
-    # MODEL_PATH = Path(f'models/checkpoints/2026-05-27-20:56:31_file_21_pretrain_qt.pth')
     MODEL_PATH = None
+    # MODEL_PATH = Path(f'models/checkpoints/2026-05-27-20:56:31_file_21_pretrain_qt.pth')
 
     TRUE_BATCH_SIZE = 16
     accumulate_every = ceil(2_000/TRUE_BATCH_SIZE)
@@ -183,18 +183,18 @@ def pretrain():
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
 
-                if batch_idx == (total_iters_per_file - 1)//2:
-                    checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num+1}_half_pretrain_qt.pth'
-                    torch.save(model.state_dict(), checkpoint_path)
-                    logger.info(f'Checkpointed at: {checkpoint_path}')
-
-                # break out early for batch rounding
-                if batch_idx == (total_iters_per_file - 1): break
-                
             else:
                 batch_info_str = f'File {file_num+1}/{len(training_files)}, accd train loss iter: {loss_val:.5f} batch: {loss_batch_val:.5f}'
                 logger.info(batch_info_str)
                 prog_bar.set_description(batch_info_str)
+            
+            if batch_idx == (total_iters_per_file - 1)//2:
+                checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num+1}_half_pretrain_qt.pth'
+                torch.save(model.state_dict(), checkpoint_path)
+                logger.info(f'Checkpointed at: {checkpoint_path}')
+
+            # break out early for batch rounding
+            if batch_idx == (total_iters_per_file - 1): break
 
         # checkpointing
         checkpoint_path = f'models/checkpoints/{experiment_start_time_str}_file_{file_num+1}_pretrain_qt.pth'
