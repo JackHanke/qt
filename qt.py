@@ -80,9 +80,13 @@ class qt(nn.Module):
 
         logits = self.output_linear(self.norm(x)).transpose(1,2)
         return logits
+    
+    # @torch.no_grad()
+    # def top_p(self, p)
+
 
     # @torch.no_grad()
-    # def generate(self, prompts, seq_len, temperature = 1.0, filter_thres = 0.9):
+    # def generate(self, context:str):
     #     b, t = prompts.shape
     #     out = prompts
     #     cache = None
