@@ -1,3 +1,5 @@
+## NOTE this code is super bad
+
 import os
 import torch
 from pathlib import Path
@@ -7,7 +9,7 @@ from tokenizers.decoders import Metaspace as MetaspaceDecoder, Sequence as Seque
 
 from qt import qt
 
-MAX_TOKENS_ALLOWED_TO_GENERATE = 256
+MAX_TOKENS_ALLOWED_TO_GENERATE = 128
 tokenizer = Tokenizer.from_file("data/tokenizer.json")
 decoder = SequenceDecoder([MetaspaceDecoder()])
 
@@ -19,6 +21,22 @@ def preprocess(text: str):
         0x2019: 0x27,  # RIGHT SINGLE QUOTATION MARK -> '
     }
     return text.translate(punctuation_map).lower().replace(r"[^a-z0-9 [:space:][:punct:]]", '')
+
+def top_k_sampling(logits, k=5, temperature=1.0):
+    # 1. Apply temperature scaling to logits
+    logits = logits / temperature
+    # 2. Get the top-k logits and their indices
+    top_k_logits, top_k_indices = torch.topk(logits, k)
+    # 3. Filter out other logits by setting them to -infinity
+    # Create a mask for tokens not in top-k
+    filtered_logits = logits.new_ones(logits.shape) * float('-inf')
+    # Scatter the top-k values back into the filtered tensor
+    filtered_logits.scatter_(1, top_k_indices, top_k_logits)
+    # 4. Convert filtered logits to probabilities
+    probabilities = torch.nn.functional.softmax(filtered_logits, dim=-1)
+    # 5. Sample the next token from the top-k distribution
+    next_token = torch.multinomial(probabilities, num_samples=1)
+    return next_token
 
 class bcolors:
     BLUE = '\033[94m'
@@ -40,10 +58,10 @@ logo_str = f'''
 '''
 
 info_string = '''
-
 Enter 'q' or 'quit' to exit chat window.
 
-'''
+Loading model...'''
+# TODO add flush context command
 
 # clear terminal header and print info
 os.system('clear')
@@ -70,15 +88,18 @@ model = qt(
     num_embeddings=NUM_EMBEDDINGS,
     device=DEVICE
 ).to(DEVICE)
-model.inference_mode()
+model.eval()
 # model_dict = torch.load(model_dir+'checkpoints/qt-pretrain_best.pt')
-MODEL_PATH = Path(f'/home/jack/vault/software/qt/models/checkpoints/2026-06-07-10:05:02/2026-06-07-10:05:02_file_32_pretrain_qt.pth')
+MODEL_PATH = Path(f'models/checkpoints/2026-06-20-21:56:34/file_1_posttrain_qt.pth')
+# MODEL_PATH = Path(f'models/checkpoints/2026-06-07-10:05:02/2026-06-07-10:05:02_file_32_pretrain_qt.pth')
 model.load_state_dict(torch.load(MODEL_PATH))
 
 # 
-user_prompt_string = f'  Talk to {bcolors.CYAN}q{bcolors.ENDC}{bcolors.BLUE}t{bcolors.ENDC}: '
+user_prompt_string = f'\n## Talk to {bcolors.CYAN}q{bcolors.ENDC}{bcolors.BLUE}t{bcolors.ENDC}: '
 
-context = '[BOS_TOKEN]'
+context = '[BOS][USER]'
+# context = '[BOS][USER]you are qt. you are a billion parameter language model who is helpful and honest.'
+context_tokens = [2]
 while True:
     user_input = str(input(user_prompt_string))
 
@@ -86,34 +107,46 @@ while True:
         print('')
         break
 
-    user_input =  '[USER]' + preprocess(user_input) + '[AI]'
+    user_input =  preprocess(user_input) + '[AI]'
+    # user_input =  preprocess(user_input)
     
     # add user input to context
     context += user_input
+    context_tokens.extend(tokenizer.encode(user_input).ids)
+    # print(context_tokens)
 
-    context_tokens = tokenizer.encode(context).ids
-
-    
+    ## model generation
     tokens_generated = 0
-    while next_token not in ['[EOS]', '[USER]', '[AI]'] and tokens_generated < MAX_TOKENS_ALLOWED_TO_GENERATE:
+    next_token_id = 7
+    while next_token_id not in [0, 1, 2, 3, 4, 5] and tokens_generated < MAX_TOKENS_ALLOWED_TO_GENERATE:
         with torch.inference_mode():
             with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
                 context_tokens_tensor = torch.tensor(context_tokens).unsqueeze(0).to(DEVICE)
                 output_logits = model(context_tokens_tensor)
 
-            # decode
-            probs = torch.nn.functional.softmax(output_logits[0, :, -1])
-
-            next_token_id = None
-
-            next_token = decoder.decode(next_token_id)
+            # sample
+            # next_token_id = top_k_sampling(output_logits[0:1, :, -1]).item()
+            # print(f'next token id: {next_token_id}')
+            preds = torch.argmax(output_logits, dim=1).squeeze(0)
+            next_token_id = preds[-1].item()
+            context_tokens.append(next_token_id)
             tokens_generated += 1
-            print(f"{bcolors.CYAN}{next_token:>12}{bcolors.ENDC}", end='')
 
-    print(f"{bcolors.CYAN}{model_response:>12}{bcolors.ENDC}")
+            # decode
+            next_token = tokenizer.decode([next_token_id])
+            if len(next_token)> 0 and next_token[0] == '▁': next_token = ' ' + next_token[1:] # NOTE war crime
+            # next_token = decoder.decode([temp])
+            print(f"{bcolors.CYAN}{next_token}{bcolors.ENDC}", end='')
+            if next_token_id in [0, 1, 2, 3, 4, 5]: print(f'ended with: {next_token_id}')
+            elif len(next_token) == 0: print(f'error with: {next_token_id}')
+
+
+    # if tokens_generated >= MAX_TOKENS_ALLOWED_TO_GENERATE:
+
+
+    # print(f'after gen: {context_tokens}')
+
+    # print(f"{bcolors.CYAN}{model_response:>12}{bcolors.ENDC}")
 
     # add response to context
-    context += model_response
-
-
-
+    # context += model_response
