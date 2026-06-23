@@ -94,51 +94,53 @@ MODEL_PATH = Path(f'models/checkpoints/2026-06-20-21:56:34/file_1_posttrain_qt.p
 # MODEL_PATH = Path(f'models/checkpoints/2026-06-07-10:05:02/2026-06-07-10:05:02_file_32_pretrain_qt.pth')
 model.load_state_dict(torch.load(MODEL_PATH))
 
-# 
-user_prompt_string = f'\n## Talk to {bcolors.CYAN}q{bcolors.ENDC}{bcolors.BLUE}t{bcolors.ENDC}: '
 
-context = '[BOS][USER]'
-# context = '[BOS][USER]you are qt. you are a billion parameter language model who is helpful and honest.'
-context_tokens = [2]
-while True:
-    user_input = str(input(user_prompt_string))
+def chat():
+    # 
+    user_prompt_string = f'\n## Talk to {bcolors.CYAN}q{bcolors.ENDC}{bcolors.BLUE}t{bcolors.ENDC}: '
 
-    if user_input in ['q', 'quit']:
-        print('')
-        break
+    context = '[BOS][USER]'
+    # context = '[BOS][USER]you are qt. you are a billion parameter language model who is helpful and honest.'
+    context_tokens = [2,4] # TODO fix this oh my god
+    while True:
+        user_input = str(input(user_prompt_string))
 
-    user_input =  preprocess(user_input) + '[AI]'
-    # user_input =  preprocess(user_input)
-    
-    # add user input to context
-    context += user_input
-    context_tokens.extend(tokenizer.encode(user_input).ids)
-    # print(context_tokens)
+        if user_input in ['q', 'quit']:
+            print('')
+            break
 
-    ## model generation
-    tokens_generated = 0
-    next_token_id = 7
-    while next_token_id not in [0, 1, 2, 3, 4, 5] and tokens_generated < MAX_TOKENS_ALLOWED_TO_GENERATE:
-        with torch.inference_mode():
-            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-                context_tokens_tensor = torch.tensor(context_tokens).unsqueeze(0).to(DEVICE)
-                output_logits = model(context_tokens_tensor)
+        user_input =  preprocess(user_input) + '[AI]'
+        # user_input =  preprocess(user_input)
+        
+        # add user input to context
+        context += user_input
+        context_tokens.extend(tokenizer.encode(user_input).ids)
+        # print(context_tokens)
 
-            # sample
-            # next_token_id = top_k_sampling(output_logits[0:1, :, -1]).item()
-            # print(f'next token id: {next_token_id}')
-            preds = torch.argmax(output_logits, dim=1).squeeze(0)
-            next_token_id = preds[-1].item()
-            context_tokens.append(next_token_id)
-            tokens_generated += 1
+        ## model generation
+        tokens_generated = 0
+        next_token_id = 7
+        while next_token_id not in [0, 1, 2, 3, 4, 5] and tokens_generated < MAX_TOKENS_ALLOWED_TO_GENERATE:
+            with torch.inference_mode():
+                with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                    context_tokens_tensor = torch.tensor(context_tokens).unsqueeze(0).to(DEVICE)
+                    output_logits = model(context_tokens_tensor)
 
-            # decode
-            next_token = tokenizer.decode([next_token_id])
-            if len(next_token)> 0 and next_token[0] == '▁': next_token = ' ' + next_token[1:] # NOTE war crime
-            # next_token = decoder.decode([temp])
-            print(f"{bcolors.CYAN}{next_token}{bcolors.ENDC}", end='')
-            if next_token_id in [0, 1, 2, 3, 4, 5]: print(f'ended with: {next_token_id}')
-            elif len(next_token) == 0: print(f'error with: {next_token_id}')
+                # sample
+                # next_token_id = top_k_sampling(output_logits[0:1, :, -1]).item()
+                # print(f'next token id: {next_token_id}')
+                preds = torch.argmax(output_logits, dim=1).squeeze(0)
+                next_token_id = preds[-1].item()
+                context_tokens.append(next_token_id)
+                tokens_generated += 1
+
+                # decode
+                next_token = tokenizer.decode([next_token_id])
+                if len(next_token)> 0 and next_token[0] == '▁': next_token = ' ' + next_token[1:] # NOTE war crime
+                # next_token = decoder.decode([temp])
+                print(f"{bcolors.CYAN}{next_token}{bcolors.ENDC}", end='')
+                if next_token_id in [0, 1, 2, 3, 4, 5]: print(f'ended with: {next_token_id}')
+                elif len(next_token) == 0: print(f'error with: {next_token_id}')
 
 
     # if tokens_generated >= MAX_TOKENS_ALLOWED_TO_GENERATE:
@@ -150,3 +152,8 @@ while True:
 
     # add response to context
     # context += model_response
+
+
+if __name__ == '__main__':
+    pass
+

@@ -70,15 +70,19 @@ class qt(nn.Module):
 
         self.norm = RMSNorm(d_model)
 
-    def forward(self, x):
+    def forward(self, x, do_viz: bool = False):
         x = self.embeddings(x)
+        if do_viz: embeds = [x.detach().cpu()]
 
         for i, (norm1, attn, norm2, ff) in enumerate(self.layers):
             attn_out = attn(norm1(x))
             x = x + attn_out
+            if do_viz: embeds.append(x.detach().cpu())
             x = x + ff(norm2(x))
+            if do_viz: embeds.append(x.detach().cpu())
 
         logits = self.output_linear(self.norm(x)).transpose(1,2)
+        if do_viz: return logits, embeds
         return logits
     
     # @torch.no_grad()
