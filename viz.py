@@ -83,12 +83,6 @@ class TypingAnimationApp(arcade.Window):
     def on_draw(self):
         """ Render the screen. """
         self.clear()
-        arcade.draw_circle_filled(
-            400,
-            300,
-            20,
-            arcade.color.RED
-        )
 
         ## AUTO SCALE AND CENTER
         if len(self.current_points) >= 2:
@@ -98,7 +92,7 @@ class TypingAnimationApp(arcade.Window):
             max_y = max([self.current_points[i][1] for i in range(len(self.current_points))])
             print(f'min_x: {min_x:.3f} max_x: {max_x:.3f} min_y: {min_y:.3f} max_y: {max_y:.3f}')
 
-            global_shrinkage = 0.6
+            global_shrinkage = 0.55
             x_scale = SCREEN_WIDTH/abs(max_x-min_x)*global_shrinkage
             y_scale = SCREEN_HEIGHT/abs(max_y-min_y)*global_shrinkage
 
@@ -107,12 +101,9 @@ class TypingAnimationApp(arcade.Window):
 
             # Draw the animated circle if it has a radius
             for point_idx in range(len(self.current_points)):
-                arcade.draw_circle_filled(
-                    x_scale*self.current_points[point_idx][0]+mid_x,
-                    y_scale*self.current_points[point_idx][1]+mid_y,
-                    self.circle_radius,
-                    self.circle_color
-                )
+                if point_idx == 0: color = arcade.color.RED
+                else: color = arcade.color.WHITE
+
                 if point_idx != len(self.current_points)-1:
                     arcade.draw_line(
                         x_scale*self.current_points[point_idx][0]+mid_x,
@@ -122,8 +113,13 @@ class TypingAnimationApp(arcade.Window):
                         color=self.circle_color,
                         line_width=3,
                     )
+                arcade.draw_circle_filled(
+                    x_scale*self.current_points[point_idx][0]+mid_x,
+                    y_scale*self.current_points[point_idx][1]+mid_y,
+                    self.circle_radius,
+                    color
+                )
 
-            
         # Draw the text the user has typed
         arcade.draw_text(
             f"{self.current_text}",
@@ -155,10 +151,22 @@ class TypingAnimationApp(arcade.Window):
 
             for i in range(len(self.current_points)):
                 x_2, y_2 = self.activations[self.activation_idx][i] # skip bos and user token
-                x_1, y_1 = self.current_points[i]
+                x_c, y_c = self.current_points[i]
 
-                self.current_points[i][0] = x_1 + (x_2 - x_1)/self.activation_interp_total
-                self.current_points[i][1] = y_1 + (y_2 - y_1)/self.activation_interp_total
+                # if self.activation_idx > 2:
+                #     x_0, y_0 = self.activations[self.activation_idx-2][i]
+                #     x_1, y_1 = self.activations[self.activation_idx-1][i]
+
+                #     x_3, y_3 = (x_0+x_1, y_0+y_1)
+
+                #     target_x = x_3 + (x_2 - x_3)*self.activation_interp_count
+                #     target_y = y_3 + (y_2 - y_3)*self.activation_interp_count
+
+                #     self.current_points[i][0] = x_c + (target_x - x_c)*(self.activation_interp_total/self.activation_interp_total)
+                #     self.current_points[i][1] = y_c + (target_y - y_c)*(self.activation_interp_total/self.activation_interp_total)
+                # else:
+                self.current_points[i][0] = x_c + (x_2 - x_c)/self.activation_interp_total
+                self.current_points[i][1] = y_c + (y_2 - y_c)/self.activation_interp_total
 
     def on_key_press(self, key, modifiers):
         """ Triggered instantly every time a key is pressed """
