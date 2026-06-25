@@ -1,9 +1,8 @@
 import torch
 
 def greedy_sampling(logits):
-    preds = torch.argmax(logits, dim=0).squeeze(0)
-    next_token_id = preds[-1].item()
-    return next_token_id
+    next_token_id = torch.argmax(logits, dim=0).squeeze(0)
+    return next_token_id.item()
 
 def top_k_sampling(logits, k=10, temperature=1.0):
     # 1. Apply temperature scaling to logits

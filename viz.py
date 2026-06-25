@@ -66,7 +66,7 @@ class TypingAnimationApp(arcade.Window):
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
         
         # Application state variables
-        self.background_color = (0,0,0)
+        self.background_color = arcade.color.WHITE
         self.current_text = ""
         self.context_tokens = []
         self.token_points = []
@@ -75,10 +75,12 @@ class TypingAnimationApp(arcade.Window):
         self.activation_idx = 1
         self.activation_interp_count = 0
         self.activation_interp_total = 10
+        self.generated_token = None
+        self.generation_done = False
 
         # Animation variables
         self.circle_radius = 6
-        self.circle_color = arcade.color.WHITE
+        self.circle_color = arcade.color.BLACK
 
     def on_draw(self):
         """ Render the screen. """
@@ -90,7 +92,7 @@ class TypingAnimationApp(arcade.Window):
             max_x = max([self.current_points[i][0] for i in range(len(self.current_points))])
             min_y = min([self.current_points[i][1] for i in range(len(self.current_points))])
             max_y = max([self.current_points[i][1] for i in range(len(self.current_points))])
-            print(f'min_x: {min_x:.3f} max_x: {max_x:.3f} min_y: {min_y:.3f} max_y: {max_y:.3f}')
+            # print(f'min_x: {min_x:.3f} max_x: {max_x:.3f} min_y: {min_y:.3f} max_y: {max_y:.3f}')
 
             global_shrinkage = 0.55
             x_scale = SCREEN_WIDTH/abs(max_x-min_x)*global_shrinkage
@@ -101,16 +103,15 @@ class TypingAnimationApp(arcade.Window):
 
             # Draw the animated circle if it has a radius
             for point_idx in range(len(self.current_points)):
-                if point_idx == 0: color = arcade.color.RED
-                else: color = arcade.color.WHITE
-
+                if self.activations is not None or self.generation_done: color = arcade.color.RED
+                else: color = self.circle_color
                 if point_idx != len(self.current_points)-1:
                     arcade.draw_line(
                         x_scale*self.current_points[point_idx][0]+mid_x,
                         y_scale*self.current_points[point_idx][1]+mid_y,
                         x_scale*self.current_points[point_idx+1][0]+mid_x,
                         y_scale*self.current_points[point_idx+1][1]+mid_y,
-                        color=self.circle_color,
+                        color=color,
                         line_width=3,
                     )
                 arcade.draw_circle_filled(
@@ -119,6 +120,20 @@ class TypingAnimationApp(arcade.Window):
                     self.circle_radius,
                     color
                 )
+        
+        if self.generation_done:
+            arcade.draw_text(
+                f"{self.generated_token}",
+                x=x_scale*self.current_points[point_idx][0]+mid_x + 10,
+                y=y_scale*self.current_points[point_idx][1]+mid_y - 10,
+                width=700,
+                color=color,
+                font_name='Liberation Mono',
+                font_size=12,
+                bold=True,
+                multiline=True
+            )
+            
 
         # Draw the text the user has typed
         arcade.draw_text(
@@ -126,7 +141,7 @@ class TypingAnimationApp(arcade.Window):
             x=50,
             y=75,
             width=700,
-            color=arcade.color.WHITE,
+            color=self.circle_color,
             font_name='Liberation Mono',
             font_size=12,
             bold=True,
@@ -147,9 +162,10 @@ class TypingAnimationApp(arcade.Window):
                 if self.activation_idx == len(self.activations) - 1:
                     self.activations  = None
                     self.activation_idx = 1
+                    self.generation_done = True
                     return
 
-            for i in range(len(self.current_points)):
+            for i in range(2, len(self.current_points)):
                 x_2, y_2 = self.activations[self.activation_idx][i] # skip bos and user token
                 x_c, y_c = self.current_points[i]
 
@@ -159,11 +175,11 @@ class TypingAnimationApp(arcade.Window):
 
                 #     x_3, y_3 = (x_0+x_1, y_0+y_1)
 
-                #     target_x = x_3 + (x_2 - x_3)*self.activation_interp_count
-                #     target_y = y_3 + (y_2 - y_3)*self.activation_interp_count
+                #     target_x = x_3 + (x_2 - x_3)*(self.activation_interp_count/self.activation_interp_total)
+                #     target_y = y_3 + (y_2 - y_3)*(self.activation_interp_count/self.activation_interp_total)
 
-                #     self.current_points[i][0] = x_c + (target_x - x_c)*(self.activation_interp_total/self.activation_interp_total)
-                #     self.current_points[i][1] = y_c + (target_y - y_c)*(self.activation_interp_total/self.activation_interp_total)
+                #     self.current_points[i][0] = x_c + (target_x - x_c)*(self.activation_interp_count/self.activation_interp_total)
+                #     self.current_points[i][1] = y_c + (target_y - y_c)*(self.activation_interp_count/self.activation_interp_total)
                 # else:
                 self.current_points[i][0] = x_c + (x_2 - x_c)/self.activation_interp_total
                 self.current_points[i][1] = y_c + (y_2 - y_c)/self.activation_interp_total
@@ -183,7 +199,7 @@ class TypingAnimationApp(arcade.Window):
         if key == arcade.key.ENTER:
             with torch.inference_mode():
                 with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-                    context_tokens_tensor = torch.tensor(self.context_tokens+[5]).unsqueeze(0).to(DEVICE)
+                    context_tokens_tensor = torch.tensor([2,4]+self.context_tokens+[5]).unsqueeze(0).to(DEVICE)
                     output_logits, activations = model(context_tokens_tensor, do_viz=True)
 
                     temp = []
@@ -196,6 +212,9 @@ class TypingAnimationApp(arcade.Window):
                 # print(f'next token id: {next_token_id}')
                 preds = torch.argmax(output_logits, dim=1).squeeze(0)
                 next_token_id = preds[-1].item()
+                next_token = tokenizer.decode([next_token_id])
+                self.generated_token = next_token[1:]
+                print(f'next_token: {next_token}')
 
             return
             
@@ -207,10 +226,7 @@ class TypingAnimationApp(arcade.Window):
             self.context_tokens = tokenizer.encode(self.current_text).ids
             self.token_points = pcaed_embeds[self.context_tokens]
             self.current_points = pcaed_embeds[self.context_tokens]
-            
-            # --- ANIMATION TRIGGER LOGIC ---
-            # 1. Randomize the background color on every keystroke
-            # self.background_color = (0,0,0)
+
 
 def main():
     app = TypingAnimationApp()

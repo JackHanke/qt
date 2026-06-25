@@ -126,7 +126,8 @@ class Chat:
                     logits = output_logits[0, :, -1]
 
                     # sample
-                    next_token_id = top_k_sampling(logits)
+                    # next_token_id = top_k_sampling(logits)
+                    next_token_id = greedy_sampling(logits)
                     if next_token_id == 3:
                         # print('[EOS]')
                         next_token_id = 4
