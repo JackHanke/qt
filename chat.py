@@ -126,8 +126,8 @@ class Chat:
                     logits = output_logits[0, :, -1]
 
                     # sample
-                    # next_token_id = top_k_sampling(logits)
-                    next_token_id = greedy_sampling(logits)
+                    # next_token_id = greedy_sampling(logits)
+                    next_token_id = top_k_sampling(logits)
                     if next_token_id == 3:
                         # print('[EOS]')
                         next_token_id = 4
@@ -142,7 +142,7 @@ class Chat:
                     print(f"{bcolors.CYAN}{next_token}{bcolors.ENDC}", end='')
 
                     # DEBUG TODO remove
-                    if next_token_id in [0, 1, 2, 5]: print(f'ended with: {next_token_id}')
+                    # if next_token_id in [0, 1, 2, 5]: print(f'ended with: {next_token_id}')
                     # elif len(next_token) == 0: print(f'error with: {next_token_id}')
 
 

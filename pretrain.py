@@ -34,12 +34,12 @@ def pretrain():
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
     # configs
-    DATA_ROOT = Path(f'data/train/')
+    DATA_ROOT = Path(f'data/pretraining/train/')
 
     MODEL_PATH = None
     # MODEL_PATH = Path(f'models/checkpoints/2026-05-27-20:56:31_file_21_pretrain_qt.pth')
 
-    TRUE_BATCH_SIZE = 16
+    TRUE_BATCH_SIZE = 2
     accumulate_every = ceil(2_000/TRUE_BATCH_SIZE)
     EFFECTIVE_BATCH_SIZE = accumulate_every*TRUE_BATCH_SIZE
 
