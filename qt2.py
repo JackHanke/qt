@@ -1,13 +1,8 @@
-from time import time
 import math
 import torch
 import torch.nn as nn
+from time import time
 from dataclasses import dataclass
-# from einops import rearrange, repeat
-
-# from flashattn.flash_attn import MHA
-# from flash_attn import MHA
-from flash_attn.modules.mha import MHA
 
 class RMSNorm(nn.Module):
     def __init__(self, dim):
@@ -30,6 +25,11 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+class qtAttention(nn.Module):
+    def __init__():
+        # TODO RoPE or PoPE, use FlexAttention, XSA, 
+        pass
+
 @dataclass
 class qtConfig:
     '''
@@ -43,7 +43,7 @@ class qtConfig:
     INIT_MEAN = 0.0
     INIT_STD = 0.02
 
-class qt(nn.Module):
+class qt2(nn.Module):
     def __init__(
         self,
         d_model: int,
@@ -54,6 +54,10 @@ class qt(nn.Module):
         num_embeddings: int,
         device,
     ):
+        '''
+        the qt2 arch
+        '''
+
         super().__init__()
         self.max_seq_len = seq_len
 
@@ -67,57 +71,28 @@ class qt(nn.Module):
 
         self.layers = nn.ModuleList([nn.ModuleList([
             RMSNorm(d_model),
-            MHA(
-                embed_dim=d_model,
-                num_heads=n_heads,
-                num_heads_kv=n_heads_kv,
-                causal=True,
-                use_alibi=(layer_idx % 4 == 3),
-                fused_bias_fc=False,
-                use_flash_attn=True,
-                device=device,
-                dtype=None,
-            ), # NoPE every 4
+            qtAttention(),
             RMSNorm(d_model),
             FeedForward(dim = d_model),
         ]) for layer_idx in range(n_layers)])
 
         self.norm = RMSNorm(d_model)
 
+        
+        
+
     def forward(self, x, do_viz: bool = False):
         x = self.embeddings(x)
         if do_viz: embeds = [x.detach().cpu()]
 
         for i, (norm1, attn, norm2, ff) in enumerate(self.layers):
-            attn_out = attn(norm1(x))
+            attn_out = norm1(attn(x))
             x = x + attn_out
             if do_viz: embeds.append(x.detach().cpu())
-            x = x + ff(norm2(x))
+            x = x + norm2(ff(x))
             if do_viz: embeds.append(x.detach().cpu())
 
         logits = self.output_linear(self.norm(x)).transpose(1,2)
         if do_viz: return logits, embeds
         return logits
     
-    # @torch.no_grad()
-    # def top_p(self, p)
-
-
-    # @torch.no_grad()
-    # def generate(self, context:str):
-    #     b, t = prompts.shape
-    #     out = prompts
-    #     cache = None
-
-    #     for _ in tqdm.tqdm(range(seq_len), desc='generating'):
-    #         curr_x = out[:, -self.max_seq_len:] if not exists(cache) else out[:, -1:]
-    #         logits, cache = self.forward(curr_x, cache = cache, return_cache = True)
-    #         logits = logits[:, -1]
-
-    #         # top-k filtering
-    #         logits = top_k(logits, thres = filter_thres)
-
-    #         probs = torch.nn.functional.softmax(logits / temperature, dim=-1)
-    #         sample = torch.multinomial(probs, 1)
-    #         out = torch.cat((out, sample), dim=-1)
-    #     return out[:, t:]

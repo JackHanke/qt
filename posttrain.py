@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from qt import qt
 from data.dataset import PretrainDataset
 
+# TODO response masking
 
 def posttrain():
     experiment_start_time = datetime.now()
