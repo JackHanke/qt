@@ -32,6 +32,7 @@ class Chat:
     def __init__(self):
         # get device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cpu")
 
         self.MAX_TOKENS_ALLOWED_TO_GENERATE = 256
 

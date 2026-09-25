@@ -30,6 +30,11 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+class qtAttention(nn.Module):
+    def __init__():
+        # TODO RoPE or PoPE, use FlexAttention, XSA, 
+        pass
+
 @dataclass
 class qtConfig:
     '''
@@ -86,6 +91,8 @@ class qt(nn.Module):
 
     def forward(self, x, do_viz: bool = False):
         x = self.embeddings(x)
+
+        # print(f'x shape: {x.shape}')
         if do_viz: embeds = [x.detach().cpu()]
 
         for i, (norm1, attn, norm2, ff) in enumerate(self.layers):
