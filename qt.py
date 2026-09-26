@@ -75,7 +75,7 @@ class qtAttention(nn.Module):
             H=None,
             Q_LEN=seq_len,
             KV_LEN=seq_len,
-        )
+        ).to(torch.device('cpu'))
 
         if use_alibi:
             self.alibi = generate_alibi_bias(self.num_heads)
@@ -83,7 +83,6 @@ class qtAttention(nn.Module):
             self.alibi = None
 
     def forward(self, x):
-        print(x.shape)
         B = x.shape[0]
         S = x.shape[1]
 
@@ -98,9 +97,7 @@ class qtAttention(nn.Module):
         key   = key.transpose(1, 2)
         value = value.transpose(1, 2)
 
-        # print(self.block_mask)
-        self.block_mask = self.block_mask._adjust(S,S)
-        # print(self.block_mask)
+        # self.block_mask = self.block_mask._adjust(S,S) # NOTE this does not work on CPU
 
         x = flex_attention(
             query,
@@ -175,7 +172,6 @@ class qt(nn.Module):
     def forward(self, x, do_viz: bool = False):
         x = self.embeddings(x)
 
-        # print(f'x shape: {x.shape}')
         if do_viz: embeds = [x.detach().cpu()]
 
         for i, (norm1, attn, norm2, ff) in enumerate(self.layers):

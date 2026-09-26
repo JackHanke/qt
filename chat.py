@@ -3,6 +3,7 @@
 import os
 import torch
 from pathlib import Path
+import math
 
 from tokenizers import Tokenizer
 from tokenizers.decoders import Metaspace as MetaspaceDecoder, Sequence as SequenceDecoder
@@ -32,6 +33,7 @@ class Chat:
     def __init__(self):
         # get device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cuda" if torch.cuda.is_available() else "mps:0")
         # self.device = torch.device("cpu")
 
         self.MAX_TOKENS_ALLOWED_TO_GENERATE = 256
@@ -41,7 +43,7 @@ class Chat:
         N_LAYERS = 22
         N_HEADS = 32
         N_HEADS_KV = 8
-        SEQ_LEN = 512
+        SEQ_LEN = 256
         NUM_EMBEDDINGS = 10_001
 
         self.model = qtflex(
@@ -122,10 +124,15 @@ class Chat:
             while next_token_id not in [0, 1, 2, 3, 4, 5] and tokens_generated < self.MAX_TOKENS_ALLOWED_TO_GENERATE:
                 with torch.inference_mode():
                     with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                        
+                        # n = len(self.context_tokens)
+                        # pad = 256 * math.ceil(n/128)
+                        # context_tokens_tensor = torch.tensor(self.context_tokens + [1 for _ in range(pad-n)]).unsqueeze(0).to(self.device)
+                        
                         context_tokens_tensor = torch.tensor(self.context_tokens).unsqueeze(0).to(self.device)
                         output_logits = self.model(context_tokens_tensor)
 
-                    logits = output_logits[0, :, -1]
+                    logits = output_logits[0, :, len(self.context_tokens)-1]
 
                     # sample
                     # next_token_id = greedy_sampling(logits)
