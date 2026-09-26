@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 # from flashattn.flash_attn import MHA
 # from flash_attn import MHA
-from flash_attn.modules.mha import MHA
+# from flash_attn.modules.mha import MHA
 
 from torch.nn.attention.flex_attention import flex_attention, create_block_mask
 
@@ -83,6 +83,7 @@ class qtAttention(nn.Module):
             self.alibi = None
 
     def forward(self, x):
+        print(x.shape)
         B = x.shape[0]
         S = x.shape[1]
 
@@ -97,7 +98,9 @@ class qtAttention(nn.Module):
         key   = key.transpose(1, 2)
         value = value.transpose(1, 2)
 
+        # print(self.block_mask)
         self.block_mask = self.block_mask._adjust(S,S)
+        # print(self.block_mask)
 
         x = flex_attention(
             query,

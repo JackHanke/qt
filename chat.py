@@ -7,7 +7,7 @@ from pathlib import Path
 from tokenizers import Tokenizer
 from tokenizers.decoders import Metaspace as MetaspaceDecoder, Sequence as SequenceDecoder
 
-from qt import qt
+from qt import qtflex
 from decode import *
 
 tokenizer = Tokenizer.from_file("data/tokenizer.json")
@@ -44,7 +44,7 @@ class Chat:
         SEQ_LEN = 512
         NUM_EMBEDDINGS = 10_001
 
-        self.model = qt(
+        self.model = qtflex(
             d_model=D_MODEL,
             n_layers=N_LAYERS,
             n_heads=N_HEADS,
@@ -55,9 +55,10 @@ class Chat:
         ).to(self.device)
         self.model.eval()
         # model_dict = torch.load(model_dir+'checkpoints/qt-pretrain_best.pt')
-        MODEL_PATH = Path(f'models/checkpoints/2026-06-20-21:56:34/file_1_posttrain_qt.pth')
+        # MODEL_PATH = Path(f'models/checkpoints/2026-06-20-21:56:34/file_1_posttrain_qt.pth')
+        MODEL_PATH = Path(f'models/checkpoints/qtflex.pth')
         # MODEL_PATH = Path(f'models/checkpoints/2026-06-07-10:05:02/2026-06-07-10:05:02_file_32_pretrain_qt.pth')
-        self.model.load_state_dict(torch.load(MODEL_PATH))
+        self.model.load_state_dict(torch.load(MODEL_PATH, map_location=self.device))
 
         self.logo_str = f'''
         {bcolors.BOLD}{bcolors.CYAN}           ___    {bcolors.ENDC}{bcolors.BLUE}    ___             {bcolors.ENDC}
