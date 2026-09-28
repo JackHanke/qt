@@ -20,8 +20,8 @@ qt is a dense GQA ALiBi/NoPE flash attn transformer. We use [RMSNorm](https://ar
 ```
 Vocab Size: 10,001
 Parameters: 1.01B
-    Embedding: 
-    Non-embedding: 
+    Embedding: 20M
+    Non-embedding: 980M
 d_model = 2048
 ffw_size = 8196
 n_heads = 32
