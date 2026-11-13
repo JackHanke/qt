@@ -11,49 +11,12 @@
            \/__/                                                  
 ```
 
-qt (pronounced "cutie") is a 1 billion parameter hand coded, from-scratch uncased english-only language model.
+qt (pronounced "cutie") is a model family of english-only language models I am hand coding from scratch.
 
-## Model Card
+## Model Family
 
-qt is a dense GQA ALiBi/NoPE flash attn transformer. We use [RMSNorm](https://arxiv.org/abs/1910.07467) and GELU activations.
-
-```
-Vocab Size: 10,001
-Parameters: 1.01B
-    Embedding: 20M
-    Non-embedding: 980M
-d_model = 2048
-ffw_size = 8196
-n_heads = 32
-n_heads_kv = 8
-n_layers = 22
-seq_len = 512
-```
-
-## Data
-
-### Pretraining
-
-For pretraining, I source my data from the [fineweb-edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) dataset
-- The pretraining dataset is a ~21.5B token subset of the above dataset, formatted in groups of 2.15GB parquet files each containg ~754M tokens each.
-
-The learning rate schedule is [Warmup Stable Decay](https://arxiv.org/abs/2404.06395)
-
-
-### Posttraining
-
-For posttraining, I use the following datasets:
-- For dialogue tuning, I use:
-    - [SAMsum](https://huggingface.co/datasets/knkarthick/samsum)
-    - [dialogsum](https://huggingface.co/datasets/knkarthick/dialogsum/viewer/default/train?row=0)
-- For instruction tuning, I use:
-    - [databricks-dolly-15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k)
-    - [norobots](https://huggingface.co/datasets/HuggingFaceH4/no_robots)
-- A (very small) custom dataset of example assistant conversations I wrote myself.
-
-## Tokenizer
-
-Custom HuggingFace tokenizer trained on uncased english with a vocab_size of 10,001, stored at `data/tokenizer.json`.
+- *qt 1B* was trained on my local machine, and is composed of entirely human-generated data. See the model card at `models/qt1/model_card.md`
+- *qt 2B* is WIP!
 
 ## Resources
 - [HuggingFace's Smol Training Playbook](https://huggingface.co/spaces/HuggingFaceTB/smol-training-playbook#introduction)
